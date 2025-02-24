@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'home_page.dart';
+import 'login_page.dart';
 
 class SignUpPage extends StatefulWidget {
   @override
@@ -10,35 +11,100 @@ class SignUpPage extends StatefulWidget {
 class _SignUpPageState extends State<SignUpPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _nameController = TextEditingController();
+  final _mobileController = TextEditingController();
+  String _selectedRole = "Driver";
 
   Future<void> _signUp() async {
     try {
-      final response = await Supabase.instance.client.auth.signUp(
+      final supabase = Supabase.instance.client;
+
+      final response = await supabase.auth.signUp(
         email: _emailController.text,
         password: _passwordController.text,
       );
 
-      if (response.user != null) {
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => HomePage()));
+      final user = response.user;
+
+      if (user != null) {
+        // Insert user details into the 'Users' table
+        final insertResponse = await supabase.from('Users').insert({
+          'user_id': user.id,
+          'name': _nameController.text,
+          'mobile': _mobileController.text,
+          'role': _selectedRole,
+        });
+
+        print('Insert Response: $insertResponse');
+
+        Navigator.pushReplacement(
+            context, MaterialPageRoute(builder: (context) => HomePage()));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('User creation failed, please try again')));
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Sign Up failed: $e')));
+      print('Error during signup: $e');
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Sign Up failed: $e')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Sign Up')),
       body: Padding(
-        padding: EdgeInsets.all(16.0),
+        padding: EdgeInsets.all(20.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TextField(controller: _emailController, decoration: InputDecoration(labelText: 'Email')),
-            TextField(controller: _passwordController, decoration: InputDecoration(labelText: 'Password'), obscureText: true),
+            Text(
+              "Create an Account",
+              style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.black87),
+            ),
+            SizedBox(height: 8),
+            Text("Sign up to get started", style: TextStyle(fontSize: 18, color: Colors.grey)),
+            SizedBox(height: 40),
+
+            TextField(controller: _nameController, decoration: InputDecoration(labelText: 'Full Name')),
             SizedBox(height: 20),
-            ElevatedButton(onPressed: _signUp, child: Text('Sign Up')),
+
+            TextField(controller: _mobileController, decoration: InputDecoration(labelText: 'Mobile Number')),
+            SizedBox(height: 20),
+
+            DropdownButtonFormField(
+              value: _selectedRole,
+              items: ['Driver', 'Manager'].map((role) {
+                return DropdownMenuItem(value: role, child: Text(role));
+              }).toList(),
+              onChanged: (value) => setState(() => _selectedRole = value.toString()),
+              decoration: InputDecoration(labelText: 'Role'),
+            ),
+            SizedBox(height: 20),
+
+            TextField(controller: _emailController, decoration: InputDecoration(labelText: 'Email')),
+            SizedBox(height: 20),
+
+            TextField(controller: _passwordController, obscureText: true, decoration: InputDecoration(labelText: 'Password')),
+            SizedBox(height: 30),
+
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _signUp,
+                style: ElevatedButton.styleFrom(backgroundColor: Color(0xFF17CE92)),
+                child: Text('Sign Up', style: TextStyle(fontSize: 18, color: Colors.white)),
+              ),
+            ),
+            SizedBox(height: 20),
+
+            Center(
+              child: TextButton(
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => LoginPage())),
+                child: Text("Already have an account? Login", style: TextStyle(color: Color(0xFF17CE92))),
+              ),
+            ),
           ],
         ),
       ),
