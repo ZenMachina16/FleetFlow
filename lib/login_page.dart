@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'home_page.dart';
+import 'manager_page.dart';
+import 'driver_page.dart';
 import 'signup_page.dart';
 
 class LoginPage extends StatefulWidget {
@@ -11,23 +12,48 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  bool _isEmailFocused = false;
-  bool _isPasswordFocused = false;
+  bool _isLoading = false;
 
   Future<void> _login() async {
+    setState(() => _isLoading = true);
+
     try {
       final response = await Supabase.instance.client.auth.signInWithPassword(
-        email: _emailController.text,
-        password: _passwordController.text,
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
       );
 
       if (response.user != null) {
-        Navigator.pushReplacement(
-            context, MaterialPageRoute(builder: (context) => HomePage()));
+        // Fetch the user role from the 'Users' table
+        final userData = await Supabase.instance.client
+            .from('Users')
+            .select('role')
+            .eq('user_id', response.user!.id)
+            .maybeSingle();
+
+        if (userData == null) {
+          throw Exception("User role not found");
+        }
+
+        String role = userData['role'];
+
+        // Redirect based on role
+        if (role == "Manager") {
+          Navigator.pushReplacement(
+              context, MaterialPageRoute(builder: (context) => ManagerPage()));
+        } else if (role == "Driver") {
+          Navigator.pushReplacement(
+              context, MaterialPageRoute(builder: (context) => DriverPage()));
+        } else {
+          throw Exception("Invalid role");
+        }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Login failed: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Login failed: ${e.toString()}')),
+      );
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
 
@@ -86,7 +112,7 @@ class _LoginPageState extends State<LoginPage> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: _login,
+                onPressed: _isLoading ? null : _login,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Color(0xFF17CE92),
                   padding: EdgeInsets.symmetric(vertical: 14),
@@ -94,7 +120,9 @@ class _LoginPageState extends State<LoginPage> {
                     borderRadius: BorderRadius.circular(50),
                   ),
                 ),
-                child: Text('Login', style: TextStyle(fontSize: 18, color: Colors.white)),
+                child: _isLoading
+                    ? CircularProgressIndicator(color: Colors.white)
+                    : Text('Login', style: TextStyle(fontSize: 18, color: Colors.white)),
               ),
             ),
             SizedBox(height: 20),
