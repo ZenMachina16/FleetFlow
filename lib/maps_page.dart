@@ -5,6 +5,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_webservice/places.dart';
 import 'package:google_maps_webservice/directions.dart' as gmaps;
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 const String googleMapsApiKey = "AIzaSyDMX2Xl8EAjMSy1J9iXO9W26E86X5Jlg9k"; // Replace with your API key
 
@@ -19,10 +20,7 @@ class _MapsPageState extends State<MapsPage> {
   LatLng? _startLocation;
   LatLng? _endLocation;
   List<LatLng> _route = [];
-  Timer? _journeyTimer;
-  int _currentIndex = 0;
-  bool _journeyStarted = false;
-  List<Prediction> _suggestions = [];
+  String _travelTime = "";
 
   final TextEditingController _startController = TextEditingController();
   final TextEditingController _endController = TextEditingController();
@@ -35,19 +33,13 @@ class _MapsPageState extends State<MapsPage> {
   }
 
   Future<void> _getCurrentLocation() async {
-    bool serviceEnabled;
-    LocationPermission permission;
-
-    // Check if location services are enabled
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      // Location services are not enabled, return an error message
       print("Location services are disabled.");
       return;
     }
 
-    // Check and request permission
-    permission = await Geolocator.checkPermission();
+    LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
@@ -56,13 +48,6 @@ class _MapsPageState extends State<MapsPage> {
       }
     }
 
-    if (permission == LocationPermission.deniedForever) {
-      // Permissions are permanently denied, we cannot request permissions.
-      print("Location permission permanently denied. Please enable it from settings.");
-      return;
-    }
-
-    // Fetch current position after permission is granted
     Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
     setState(() {
       _currentPosition = LatLng(position.latitude, position.longitude);
@@ -71,14 +56,8 @@ class _MapsPageState extends State<MapsPage> {
     mapController.animateCamera(CameraUpdate.newLatLng(_currentPosition));
   }
 
-
-  String _travelTime = ""; // Holds the estimated time
-
   Future<void> _fetchRoute() async {
-    if (_startLocation == null || _endLocation == null) {
-      print("Start or End location not set");
-      return;
-    }
+    if (_startLocation == null || _endLocation == null) return;
 
     final response = await _directions.directionsWithLocation(
       gmaps.Location(lat: _startLocation!.latitude, lng: _startLocation!.longitude),
@@ -98,50 +77,29 @@ class _MapsPageState extends State<MapsPage> {
         _travelTime = durationText;
       });
 
-      print("Route fetched successfully with ${_route.length} points.");
+      // Zoom to fit the entire route
+      mapController.animateCamera(CameraUpdate.newLatLngBounds(
+        LatLngBounds(
+          southwest: LatLng(
+              _startLocation!.latitude < _endLocation!.latitude
+                  ? _startLocation!.latitude
+                  : _endLocation!.latitude,
+              _startLocation!.longitude < _endLocation!.longitude
+                  ? _startLocation!.longitude
+                  : _endLocation!.longitude),
+          northeast: LatLng(
+              _startLocation!.latitude > _endLocation!.latitude
+                  ? _startLocation!.latitude
+                  : _endLocation!.latitude,
+              _startLocation!.longitude > _endLocation!.longitude
+                  ? _startLocation!.longitude
+                  : _endLocation!.longitude),
+        ),
+        100.0,
+      ));
     } else {
       print("Failed to fetch route: ${response.status}");
     }
-  }
-
-
-
-  void _startJourney() {
-    if (_journeyStarted || _route.isEmpty) return;
-    _journeyStarted = true;
-    _currentIndex = 0;
-
-    _journeyTimer = Timer.periodic(Duration(milliseconds: 500), (timer) {
-      if (_currentIndex < _route.length - 1) {
-        LatLng nextPosition = _route[_currentIndex + 1];
-        _moveCarSmoothly(_currentPosition, nextPosition);
-        _currentIndex++;
-      } else {
-        _stopJourney();
-      }
-    });
-  }
-
-  void _moveCarSmoothly(LatLng start, LatLng end) async {
-    const int steps = 10;
-    for (int i = 1; i <= steps; i++) {
-      double lat = start.latitude + (end.latitude - start.latitude) * (i / steps);
-      double lng = start.longitude + (end.longitude - start.longitude) * (i / steps);
-
-      await Future.delayed(Duration(milliseconds: 100));
-      setState(() {
-        _currentPosition = LatLng(lat, lng);
-      });
-
-      mapController.animateCamera(
-        CameraUpdate.newLatLng(_currentPosition),
-      );
-    }
-  }
-
-  void _stopJourney() {
-    _journeyTimer?.cancel();
-    _journeyStarted = false;
   }
 
   Future<void> _searchLocation(String query, bool isStart) async {
@@ -150,19 +108,20 @@ class _MapsPageState extends State<MapsPage> {
     if (response.isOkay) {
       setState(() {
         _suggestions = response.predictions;
+        _searchingForStart = isStart;
       });
     } else {
       print("Failed to find location: ${response.status}");
     }
   }
 
-  Future<void> _selectLocation(Prediction prediction, bool isStart) async {
+  Future<void> _selectLocation(Prediction prediction) async {
     final details = await _places.getDetailsByPlaceId(prediction.placeId!);
     final location = details.result.geometry!.location;
     LatLng newLocation = LatLng(location.lat, location.lng);
 
     setState(() {
-      if (isStart) {
+      if (_searchingForStart) {
         _startLocation = newLocation;
         _startController.text = details.result.name;
       } else {
@@ -175,9 +134,35 @@ class _MapsPageState extends State<MapsPage> {
     _fetchRoute();
   }
 
+  Future<void> _openGoogleMapsNavigation() async {
+    if (_startLocation == null || _endLocation == null) return;
+
+    final String url =
+        "https://www.google.com/maps/dir/?api=1&origin=${_startLocation!.latitude},${_startLocation!.longitude}&destination=${_endLocation!.latitude},${_endLocation!.longitude}&travelmode=driving";
+
+    if (await canLaunch(url)) {
+      await launch(url);
+    } else {
+      print("Could not open Google Maps.");
+    }
+  }
+
+  Future<void> openGoogleMaps() async {
+    final Uri googleMapsUrl = Uri.parse(
+        "https://www.google.com/maps/dir/?api=1&origin=19.2183307,72.9780897&destination=19.1758825,72.95211929999999&travelmode=driving");
+
+    if (await canLaunchUrl(googleMapsUrl)) {
+      await launchUrl(googleMapsUrl, mode: LaunchMode.externalApplication);
+    } else {
+      print("Could not open Google Maps.");
+    }
+  }
+
+  List<Prediction> _suggestions = [];
+  bool _searchingForStart = true;
+
   @override
   void dispose() {
-    _journeyTimer?.cancel();
     _startController.dispose();
     _endController.dispose();
     super.dispose();
@@ -197,18 +182,16 @@ class _MapsPageState extends State<MapsPage> {
               if (_endLocation != null) Marker(markerId: MarkerId("end"), position: _endLocation!),
             },
             polylines: {
-              if (_route.isNotEmpty)
-                Polyline(
-                  polylineId: PolylineId("route"),
-                  points: _route,
-                  color: Colors.blue,
-                  width: 5,
-                ),
+              Polyline(
+                polylineId: PolylineId("route"),
+                points: _route,
+                color: Colors.blue,
+                width: 5,
+              ),
             },
             myLocationEnabled: true,
           ),
 
-          // Search fields
           Positioned(
             top: 20,
             left: 10,
@@ -233,12 +216,26 @@ class _MapsPageState extends State<MapsPage> {
                   children: _suggestions.map((prediction) {
                     return ListTile(
                       title: Text(prediction.description!),
-                      onTap: () => _selectLocation(prediction, _suggestions.indexOf(prediction) == 0),
+                      onTap: () => _selectLocation(prediction),
                     );
                   }).toList(),
                 ),
               ),
             ),
+
+          Positioned(
+            bottom: 20,
+            left: 20,
+            child: Column(
+              children: [
+                ElevatedButton(
+                  onPressed: _openGoogleMapsNavigation,
+                  child: Text("Start Navigation"),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
