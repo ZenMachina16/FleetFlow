@@ -15,7 +15,7 @@ class MapsPage extends StatefulWidget {
 
 class _MapsPageState extends State<MapsPage> {
   late GoogleMapController mapController;
-  LatLng _currentPosition = LatLng(83.4444, 72.8777); // Default: Mumbai
+  LatLng _currentPosition = LatLng(19.0760, 72.8777); // Default: Mumbai
   LatLng? _startLocation;
   LatLng? _endLocation;
   List<LatLng> _route = [];
@@ -23,13 +23,11 @@ class _MapsPageState extends State<MapsPage> {
   int _currentIndex = 0;
   bool _journeyStarted = false;
   List<Prediction> _suggestions = [];
-  Set<Polyline> _polylines = {}; // Store polyline paths
 
   final TextEditingController _startController = TextEditingController();
   final TextEditingController _endController = TextEditingController();
   final GoogleMapsPlaces _places = GoogleMapsPlaces(apiKey: googleMapsApiKey);
-  final gmaps.GoogleMapsDirections _directions =
-  gmaps.GoogleMapsDirections(apiKey: googleMapsApiKey);
+  final gmaps.GoogleMapsDirections _directions = gmaps.GoogleMapsDirections(apiKey: googleMapsApiKey);
 
   void _onMapCreated(GoogleMapController controller) {
     mapController = controller;
@@ -37,19 +35,50 @@ class _MapsPageState extends State<MapsPage> {
   }
 
   Future<void> _getCurrentLocation() async {
-    LocationPermission permission = await Geolocator.requestPermission();
-    Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high);
+    bool serviceEnabled;
+    LocationPermission permission;
 
+    // Check if location services are enabled
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      // Location services are not enabled, return an error message
+      print("Location services are disabled.");
+      return;
+    }
+
+    // Check and request permission
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        print("Location permission denied.");
+        return;
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      // Permissions are permanently denied, we cannot request permissions.
+      print("Location permission permanently denied. Please enable it from settings.");
+      return;
+    }
+
+    // Fetch current position after permission is granted
+    Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
     setState(() {
       _currentPosition = LatLng(position.latitude, position.longitude);
     });
 
-    mapController.animateCamera(CameraUpdate.newLatLngZoom(_currentPosition, 14));
+    mapController.animateCamera(CameraUpdate.newLatLng(_currentPosition));
   }
 
+
+  String _travelTime = ""; // Holds the estimated time
+
   Future<void> _fetchRoute() async {
-    if (_startLocation == null || _endLocation == null) return;
+    if (_startLocation == null || _endLocation == null) {
+      print("Start or End location not set");
+      return;
+    }
 
     final response = await _directions.directionsWithLocation(
       gmaps.Location(lat: _startLocation!.latitude, lng: _startLocation!.longitude),
@@ -58,44 +87,61 @@ class _MapsPageState extends State<MapsPage> {
     );
 
     if (response.isOkay && response.routes.isNotEmpty) {
+      final route = response.routes[0];
+      String durationText = route.legs.first.duration.text;
+
       PolylinePoints polylinePoints = PolylinePoints();
-      List<PointLatLng> result = polylinePoints.decodePolyline(response.routes[0].overviewPolyline.points);
+      List<PointLatLng> result = polylinePoints.decodePolyline(route.overviewPolyline.points);
 
       setState(() {
         _route = result.map((point) => LatLng(point.latitude, point.longitude)).toList();
-
-        _polylines.clear();
-        _polylines.add(
-          Polyline(
-            polylineId: PolylineId("route"),
-            points: _route,
-            color: Colors.blue,
-            width: 5,
-          ),
-        );
+        _travelTime = durationText;
       });
 
-      // Move camera to show full route
-      mapController.animateCamera(CameraUpdate.newLatLngBounds(
-        LatLngBounds(
-          southwest: LatLng(
-              _startLocation!.latitude < _endLocation!.latitude
-                  ? _startLocation!.latitude
-                  : _endLocation!.latitude,
-              _startLocation!.longitude < _endLocation!.longitude
-                  ? _startLocation!.longitude
-                  : _endLocation!.longitude),
-          northeast: LatLng(
-              _startLocation!.latitude > _endLocation!.latitude
-                  ? _startLocation!.latitude
-                  : _endLocation!.latitude,
-              _startLocation!.longitude > _endLocation!.longitude
-                  ? _startLocation!.longitude
-                  : _endLocation!.longitude),
-        ),
-        100.0,
-      ));
+      print("Route fetched successfully with ${_route.length} points.");
+    } else {
+      print("Failed to fetch route: ${response.status}");
     }
+  }
+
+
+
+  void _startJourney() {
+    if (_journeyStarted || _route.isEmpty) return;
+    _journeyStarted = true;
+    _currentIndex = 0;
+
+    _journeyTimer = Timer.periodic(Duration(milliseconds: 500), (timer) {
+      if (_currentIndex < _route.length - 1) {
+        LatLng nextPosition = _route[_currentIndex + 1];
+        _moveCarSmoothly(_currentPosition, nextPosition);
+        _currentIndex++;
+      } else {
+        _stopJourney();
+      }
+    });
+  }
+
+  void _moveCarSmoothly(LatLng start, LatLng end) async {
+    const int steps = 10;
+    for (int i = 1; i <= steps; i++) {
+      double lat = start.latitude + (end.latitude - start.latitude) * (i / steps);
+      double lng = start.longitude + (end.longitude - start.longitude) * (i / steps);
+
+      await Future.delayed(Duration(milliseconds: 100));
+      setState(() {
+        _currentPosition = LatLng(lat, lng);
+      });
+
+      mapController.animateCamera(
+        CameraUpdate.newLatLng(_currentPosition),
+      );
+    }
+  }
+
+  void _stopJourney() {
+    _journeyTimer?.cancel();
+    _journeyStarted = false;
   }
 
   Future<void> _searchLocation(String query, bool isStart) async {
@@ -105,6 +151,8 @@ class _MapsPageState extends State<MapsPage> {
       setState(() {
         _suggestions = response.predictions;
       });
+    } else {
+      print("Failed to find location: ${response.status}");
     }
   }
 
@@ -145,17 +193,18 @@ class _MapsPageState extends State<MapsPage> {
             onMapCreated: _onMapCreated,
             initialCameraPosition: CameraPosition(target: _currentPosition, zoom: 14),
             markers: {
-              if (_startLocation != null)
-                Marker(markerId: MarkerId("start"), position: _startLocation!),
-              if (_endLocation != null)
-                Marker(markerId: MarkerId("end"), position: _endLocation!),
-              Marker(
-                markerId: MarkerId("car"),
-                position: _currentPosition,
-                icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
-              ),
+              if (_startLocation != null) Marker(markerId: MarkerId("start"), position: _startLocation!),
+              if (_endLocation != null) Marker(markerId: MarkerId("end"), position: _endLocation!),
             },
-            polylines: _polylines,
+            polylines: {
+              if (_route.isNotEmpty)
+                Polyline(
+                  polylineId: PolylineId("route"),
+                  points: _route,
+                  color: Colors.blue,
+                  width: 5,
+                ),
+            },
             myLocationEnabled: true,
           ),
 
@@ -173,7 +222,6 @@ class _MapsPageState extends State<MapsPage> {
             ),
           ),
 
-          // Location suggestions list
           if (_suggestions.isNotEmpty)
             Positioned(
               top: 120,
@@ -185,7 +233,7 @@ class _MapsPageState extends State<MapsPage> {
                   children: _suggestions.map((prediction) {
                     return ListTile(
                       title: Text(prediction.description!),
-                      onTap: () => _selectLocation(prediction, true),
+                      onTap: () => _selectLocation(prediction, _suggestions.indexOf(prediction) == 0),
                     );
                   }).toList(),
                 ),
