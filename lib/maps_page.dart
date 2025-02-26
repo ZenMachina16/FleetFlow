@@ -137,11 +137,11 @@ class _MapsPageState extends State<MapsPage> {
   Future<void> _openGoogleMapsNavigation() async {
     if (_startLocation == null || _endLocation == null) return;
 
-    final String url =
-        "https://www.google.com/maps/dir/?api=1&origin=${_startLocation!.latitude},${_startLocation!.longitude}&destination=${_endLocation!.latitude},${_endLocation!.longitude}&travelmode=driving";
+    final Uri googleMapsUri = Uri.parse(
+        "google.navigation:q=${_endLocation!.latitude},${_endLocation!.longitude}&mode=d");
 
-    if (await canLaunch(url)) {
-      await launch(url);
+    if (await canLaunchUrl(googleMapsUri)) {
+      await launchUrl(googleMapsUri, mode: LaunchMode.externalApplication);
     } else {
       print("Could not open Google Maps.");
     }
