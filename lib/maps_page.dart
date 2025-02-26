@@ -5,7 +5,14 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_webservice/places.dart';
 import 'package:google_maps_webservice/directions.dart' as gmaps;
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_mapbox_navigation/flutter_mapbox_navigation.dart';
+
+
+
+
+const String mapboxAccessToken = "sk.eyJ1IjoiYXRoYXJ2YW1wMDQiLCJhIjoiY203bHFkNDE1MGVxNTJscXEydDVzNWI5dSJ9.cYEiC2CRD5kT2dg0r_b9gQ";
+
+
 
 const String googleMapsApiKey = "AIzaSyDMX2Xl8EAjMSy1J9iXO9W26E86X5Jlg9k"; // Replace with your API key
 
@@ -15,7 +22,7 @@ class MapsPage extends StatefulWidget {
 }
 
 class _MapsPageState extends State<MapsPage> {
-  late GoogleMapController mapController;
+  late GoogleMapController _mapController;
   LatLng _currentPosition = LatLng(19.0760, 72.8777); // Default: Mumbai
   LatLng? _startLocation;
   LatLng? _endLocation;
@@ -27,25 +34,23 @@ class _MapsPageState extends State<MapsPage> {
   final GoogleMapsPlaces _places = GoogleMapsPlaces(apiKey: googleMapsApiKey);
   final gmaps.GoogleMapsDirections _directions = gmaps.GoogleMapsDirections(apiKey: googleMapsApiKey);
 
-  void _onMapCreated(GoogleMapController controller) {
-    mapController = controller;
+  List<Prediction> _suggestions = [];
+  bool _searchingForStart = true;
+
+  @override
+  void initState() {
+    super.initState();
     _getCurrentLocation();
   }
 
-  Future<void> _getCurrentLocation() async {
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      print("Location services are disabled.");
-      return;
-    }
+  void _onMapCreated(GoogleMapController controller) {
+    _mapController = controller;
+  }
 
+  Future<void> _getCurrentLocation() async {
     LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
+    if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
       permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        print("Location permission denied.");
-        return;
-      }
     }
 
     Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
@@ -53,7 +58,7 @@ class _MapsPageState extends State<MapsPage> {
       _currentPosition = LatLng(position.latitude, position.longitude);
     });
 
-    mapController.animateCamera(CameraUpdate.newLatLng(_currentPosition));
+    _mapController.animateCamera(CameraUpdate.newLatLngZoom(_currentPosition, 14));
   }
 
   Future<void> _fetchRoute() async {
@@ -77,30 +82,20 @@ class _MapsPageState extends State<MapsPage> {
         _travelTime = durationText;
       });
 
-      // Zoom to fit the entire route
-      mapController.animateCamera(CameraUpdate.newLatLngBounds(
+      _mapController.animateCamera(CameraUpdate.newLatLngBounds(
         LatLngBounds(
           southwest: LatLng(
-              _startLocation!.latitude < _endLocation!.latitude
-                  ? _startLocation!.latitude
-                  : _endLocation!.latitude,
-              _startLocation!.longitude < _endLocation!.longitude
-                  ? _startLocation!.longitude
-                  : _endLocation!.longitude),
+              _startLocation!.latitude < _endLocation!.latitude ? _startLocation!.latitude : _endLocation!.latitude,
+              _startLocation!.longitude < _endLocation!.longitude ? _startLocation!.longitude : _endLocation!.longitude),
           northeast: LatLng(
-              _startLocation!.latitude > _endLocation!.latitude
-                  ? _startLocation!.latitude
-                  : _endLocation!.latitude,
-              _startLocation!.longitude > _endLocation!.longitude
-                  ? _startLocation!.longitude
-                  : _endLocation!.longitude),
+              _startLocation!.latitude > _endLocation!.latitude ? _startLocation!.latitude : _endLocation!.latitude,
+              _startLocation!.longitude > _endLocation!.longitude ? _startLocation!.longitude : _endLocation!.longitude),
         ),
         100.0,
       ));
-    } else {
-      print("Failed to fetch route: ${response.status}");
     }
   }
+
 
   Future<void> _searchLocation(String query, bool isStart) async {
     final response = await _places.autocomplete(query);
@@ -110,8 +105,6 @@ class _MapsPageState extends State<MapsPage> {
         _suggestions = response.predictions;
         _searchingForStart = isStart;
       });
-    } else {
-      print("Failed to find location: ${response.status}");
     }
   }
 
@@ -134,44 +127,32 @@ class _MapsPageState extends State<MapsPage> {
     _fetchRoute();
   }
 
-  Future<void> _openGoogleMapsNavigation() async {
+  Future<void> _startNavigation() async {
     if (_startLocation == null || _endLocation == null) return;
 
-    final Uri googleMapsUri = Uri.parse(
-        "google.navigation:q=${_endLocation!.latitude},${_endLocation!.longitude}&mode=d");
-
-    if (await canLaunchUrl(googleMapsUri)) {
-      await launchUrl(googleMapsUri, mode: LaunchMode.externalApplication);
-    } else {
-      print("Could not open Google Maps.");
-    }
+    MapBoxNavigation.instance.startNavigation(
+      wayPoints: [
+        WayPoint(name: "Start", latitude: _startLocation!.latitude, longitude: _startLocation!.longitude),
+        WayPoint(name: "End", latitude: _endLocation!.latitude, longitude: _endLocation!.longitude),
+      ],
+      options: MapBoxOptions(
+        mode: MapBoxNavigationMode.driving, // Use walking/cycling if needed
+        simulateRoute: false, // Set to true for testing
+        language: "en",
+        units: VoiceUnits.metric,
+        // allowUTurnAtWayPoints: true,
+        voiceInstructionsEnabled: true, // Enable turn-by-turn voice instructions
+        bannerInstructionsEnabled: true,
+      ),
+    );
   }
 
-  Future<void> openGoogleMaps() async {
-    final Uri googleMapsUrl = Uri.parse(
-        "https://www.google.com/maps/dir/?api=1&origin=19.2183307,72.9780897&destination=19.1758825,72.95211929999999&travelmode=driving");
 
-    if (await canLaunchUrl(googleMapsUrl)) {
-      await launchUrl(googleMapsUrl, mode: LaunchMode.externalApplication);
-    } else {
-      print("Could not open Google Maps.");
-    }
-  }
-
-  List<Prediction> _suggestions = [];
-  bool _searchingForStart = true;
-
-  @override
-  void dispose() {
-    _startController.dispose();
-    _endController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text("Navigation")),
+      appBar: AppBar(title: Text("In-App Navigation")),
       body: Stack(
         children: [
           GoogleMap(
@@ -228,11 +209,29 @@ class _MapsPageState extends State<MapsPage> {
             left: 20,
             child: Column(
               children: [
-                ElevatedButton(
-                  onPressed: _openGoogleMapsNavigation,
-                  child: Text("Start Navigation"),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                if (_travelTime.isNotEmpty)
+                  Container(
+                    padding: EdgeInsets.all(10),
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
+                    child: Text("Estimated Time: $_travelTime", style: TextStyle(fontSize: 16)),
+                  ),
+                SizedBox(height: 10),
+                Column(
+                  children: [
+                    ElevatedButton(
+                      onPressed: _fetchRoute,
+                      child: Text("Show Route"),
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+                    ),
+                    SizedBox(height: 10),
+                    ElevatedButton(
+                      onPressed: _startNavigation, // Start turn-by-turn navigation
+                      child: Text("Start Navigation"),
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                    ),
+                  ],
                 ),
+
               ],
             ),
           ),

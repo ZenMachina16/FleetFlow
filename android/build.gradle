@@ -3,7 +3,16 @@ allprojects {
         google()
         mavenCentral()
     }
+
+    configurations.all {
+        resolutionStrategy {
+            force 'com.mapbox.common:common:23.8.0'
+            force 'com.mapbox.mapboxsdk:mapbox-android-core:5.0.0'
+        }
+    }
+
 }
+
 
 rootProject.buildDir = "../build"
 subprojects {
