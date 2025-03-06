@@ -47,7 +47,7 @@ class _AddDeliveryPageState extends State<AddDeliveryPage> {
         'scheduled_pickup_time': _pickupTime?.toIso8601String(),
         'scheduled_delivery_time': _deliveryTime?.toIso8601String(),
         'current_status': 'Pending',
-        'package_details': _packageDetailsController.text,
+        'capacity': _packageDetailsController.text,
         'priority_level': int.tryParse(_priorityController.text) ?? 0,
         'created_by': supabase.auth.currentUser?.id,
       });
@@ -151,7 +151,8 @@ class _AddDeliveryPageState extends State<AddDeliveryPage> {
 
               TextFormField(
                 controller: _packageDetailsController,
-                decoration: InputDecoration(labelText: 'Package Details', prefixIcon: Icon(Icons.inventory)),
+                decoration: InputDecoration(labelText: 'Capacity', prefixIcon: Icon(Icons.inventory)),
+                  keyboardType: TextInputType.number,
               ),
 
               TextFormField(
