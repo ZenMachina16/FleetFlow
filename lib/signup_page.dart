@@ -27,15 +27,32 @@ class _SignUpPageState extends State<SignUpPage> {
       final user = response.user;
 
       if (user != null) {
-        // Insert user details into the 'Users' table
-        final insertResponse = await supabase.from('Users').insert({
+        // Insert into Users Table (common for both Driver & Manager)
+        final userInsert = await supabase.from('Users').insert({
           'user_id': user.id,
           'name': _nameController.text,
           'mobile': _mobileController.text,
           'role': _selectedRole,
         });
 
-        print('Insert Response: $insertResponse');
+        print('User Insert Response: $userInsert');
+
+        // If the role is Driver, also insert into Driver Table
+        if (_selectedRole == "Driver") {
+          final driverInsert = await supabase.from('driver').insert({
+            'driver_id': user.id, // Same ID as Supabase Auth
+            'name': _nameController.text,
+            'phone': _mobileController.text,
+            'email': _emailController.text,
+            'license_number': null,  // Can be updated later
+            'license_expiry_date': null,
+            'status': 'Available',  // Default status
+            'rating': 5.0,  // Default rating
+            'assigned_truck_id': null, // Assigned later
+          });
+
+          print('Driver Insert Response: $driverInsert');
+        }
 
         Navigator.pushReplacement(
             context, MaterialPageRoute(builder: (context) => HomePage()));
