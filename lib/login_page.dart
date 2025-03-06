@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'manager_page.dart';
+import 'add_delivery.dart';
 import 'driver_page.dart';
 import 'signup_page.dart';
 
@@ -40,7 +40,7 @@ class _LoginPageState extends State<LoginPage> {
         // Redirect based on role
         if (role == "Manager") {
           Navigator.pushReplacement(
-              context, MaterialPageRoute(builder: (context) => ManagerPage()));
+              context, MaterialPageRoute(builder: (context) => AddDeliveryPage()));
         } else if (role == "Driver") {
           Navigator.pushReplacement(
               context, MaterialPageRoute(builder: (context) => DriverPage()));
