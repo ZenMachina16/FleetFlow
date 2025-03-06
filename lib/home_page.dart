@@ -82,7 +82,7 @@ class _HomePageState extends State<HomePage> {
             ElevatedButton(
               onPressed: () => Navigator.push(
                   context, MaterialPageRoute(builder: (context) => MapsPage())),
-              child: Text("Open Google Maps"),
+              child: Text("Open Maps"),
             ),
           ],
         ),

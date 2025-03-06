@@ -30,8 +30,6 @@ class _NavigationPageState extends State<NavigationPage> {
         simulateRoute: false,
         language: "en",
         units: VoiceUnits.metric,
-        voiceInstructionsEnabled: true,
-        bannerInstructionsEnabled: true,
       ),
     );
 
@@ -45,9 +43,7 @@ class _NavigationPageState extends State<NavigationPage> {
     return Scaffold(
       appBar: AppBar(title: Text("Navigation")),
       body: Center(
-        child: _isNavigating
-            ? Text("Navigating...", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold))
-            : CircularProgressIndicator(),
+        child: _isNavigating ? Text("Navigating...") : CircularProgressIndicator(),
       ),
     );
   }
