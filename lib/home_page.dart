@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'login_page.dart';
-import 'manager_page.dart';
+import 'add_delivery.dart';
 import 'driver_page.dart';
 import 'maps_page.dart';
 
@@ -44,7 +44,7 @@ class _HomePageState extends State<HomePage> {
       String role = response['role'];
 
       if (role == "Manager") {
-        Navigator.push(context, MaterialPageRoute(builder: (context) => ManagerPage()));
+        Navigator.push(context, MaterialPageRoute(builder: (context) => AddDeliveryPage()));
       } else if (role == "Driver") {
         Navigator.push(context, MaterialPageRoute(builder: (context) => DriverPage()));
       } else {
