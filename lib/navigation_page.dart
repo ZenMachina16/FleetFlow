@@ -1,0 +1,54 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_mapbox_navigation/flutter_mapbox_navigation.dart';
+
+class NavigationPage extends StatefulWidget {
+  final WayPoint startLocation;
+  final WayPoint endLocation;
+
+  NavigationPage({required this.startLocation, required this.endLocation});
+
+  @override
+  _NavigationPageState createState() => _NavigationPageState();
+}
+
+class _NavigationPageState extends State<NavigationPage> {
+  late MapBoxNavigation _mapBoxNavigation;
+  bool _isNavigating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _mapBoxNavigation = MapBoxNavigation.instance;
+    _startNavigation();
+  }
+
+  Future<void> _startNavigation() async {
+    await _mapBoxNavigation.startNavigation(
+      wayPoints: [widget.startLocation, widget.endLocation],
+      options: MapBoxOptions(
+        mode: MapBoxNavigationMode.driving,
+        simulateRoute: false,
+        language: "en",
+        units: VoiceUnits.metric,
+        voiceInstructionsEnabled: true,
+        bannerInstructionsEnabled: true,
+      ),
+    );
+
+    setState(() {
+      _isNavigating = true;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text("Navigation")),
+      body: Center(
+        child: _isNavigating
+            ? Text("Navigating...", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold))
+            : CircularProgressIndicator(),
+      ),
+    );
+  }
+}
