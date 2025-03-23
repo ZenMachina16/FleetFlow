@@ -1,16 +1,19 @@
-# fleet_route
+# Here's the proposed solution to the project
+![image](https://github.com/user-attachments/assets/1c352bbf-b919-4521-99fe-16f6a5943419)
 
-A new Flutter project.
+This project implements dynamic route optimization for fleet management using priority-based pathfinding and heuristic algorithm of Travelling Salesman Problem. The system ensures efficient delivery by adjusting routes in real time based on priority destinations.
 
-## Getting Started
+## 📌 Key Features:
 
-This project is a starting point for a Flutter application.
+## Priority-Based Optimization: Routes start from high-priority locations if detected.
 
-A few resources to get you started if this is your first Flutter project:
+## Dynamic Rerouting: If another truck is assigned to a priority location, the first truck is redirected.
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+## Heuristic Pathfinding: ACO is used to optimize routes efficiently.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Real-Time Monitoring: Optimized routes are assigned, and GPS tracking is enabled for live monitoring.
+
+## 📷 Workflow Overview:
+The following flowchart illustrates the route optimization process:
+
+This system thus enhances delivery efficiency, reduces fuel consumption, and improves fleet utilization
